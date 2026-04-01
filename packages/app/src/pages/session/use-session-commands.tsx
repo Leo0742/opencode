@@ -352,6 +352,25 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     })
   }
 
+  const debate = () => {
+    const sessionID = params.id
+    if (!sessionID) return
+    const rawPrompt = prompt.current()
+    const taskText = rawPrompt
+      .map((part) => ("content" in part ? part.content : "text" in part ? (part as any).text : ""))
+      .join("")
+      .trim()
+    void import("@/components/dialog-debate").then((x) => {
+      dialog.show(() => (
+        <x.DialogDebate
+          sessionID={sessionID}
+          task={taskText}
+          onClose={() => dialog.close()}
+        />
+      ))
+    })
+  }
+
   const shareCmds = () => {
     if (sync.data.config.share === "disabled") return []
     return [
@@ -415,6 +434,14 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       slash: "fork",
       disabled: !params.id || visibleUserMessages().length === 0,
       onSelect: fork,
+    }),
+    sessionCommand({
+      id: "session.debate",
+      title: "Debate / Consensus",
+      description: "Run a multi-model planning, implementation, and review pipeline",
+      slash: "debate",
+      disabled: !params.id,
+      onSelect: debate,
     }),
   ]
 

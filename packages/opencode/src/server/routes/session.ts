@@ -21,6 +21,7 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Bus } from "../../bus"
 import { NamedError } from "@opencode-ai/util/error"
+import { DebateOrchestrator, DebateConfig, Artifact } from "../../orchestration"
 
 const log = Log.create({ service: "server" })
 
@@ -1026,6 +1027,82 @@ export const SessionRoutes = lazy(() =>
           reply: c.req.valid("json").response,
         })
         return c.json(true)
+      },
+    )
+    .post(
+      "/:sessionID/debate",
+      describeRoute({
+        summary: "Run Debate/Consensus workflow",
+        description:
+          "Start a multi-model Debate/Consensus orchestration run attached to an existing session. " +
+          "Creates child sessions for each pipeline role (planner, critic, judge, implementer, reviewer, verifier). " +
+          "Returns the full DebateResult artifact when the pipeline completes.",
+        operationId: "session.debate",
+        responses: {
+          200: {
+            description: "DebateResult artifact",
+            content: {
+              "application/json": {
+                schema: resolver(Artifact.DebateResult),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: SessionID.zod,
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          task: z.string().describe("The task or coding request to solve via the Debate pipeline"),
+          preset: DebateConfig.Preset.optional().default("balanced").describe(
+            "Pipeline preset: fast | balanced | deep | custom",
+          ),
+          config: DebateConfig.PipelineConfig.optional().describe(
+            "Full pipeline config (takes precedence over preset when provided)",
+          ),
+          model: z
+            .object({ providerID: z.string(), modelID: z.string() })
+            .optional()
+            .describe("Base model to use (falls back to default model if omitted)"),
+          repoSummary: z.string().optional().describe("Optional repository / project context summary"),
+          relevantFiles: z.string().optional().describe("Optional relevant file contents"),
+          constraints: z.array(z.string()).optional().describe("Optional hard constraints for all planners"),
+        }),
+      ),
+      async (c) => {
+        const { sessionID } = c.req.valid("param")
+        const body = c.req.valid("json")
+
+        // Verify the session exists
+        await Session.get(sessionID)
+
+        const config = body.config ?? DebateConfig.resolve(body.preset ?? "balanced")
+
+        c.status(200)
+        c.header("Content-Type", "application/json")
+        return stream(c, async (s) => {
+          const abortController = new AbortController()
+          c.req.raw.signal?.addEventListener("abort", () => abortController.abort())
+
+          const result = await DebateOrchestrator.run({
+            task: body.task,
+            parentSessionID: sessionID,
+            config,
+            model: body.model,
+            repoSummary: body.repoSummary,
+            relevantFiles: body.relevantFiles,
+            constraints: body.constraints,
+            abortSignal: abortController.signal,
+          })
+
+          s.write(JSON.stringify(result))
+        })
       },
     ),
 )

@@ -1076,6 +1076,27 @@ export namespace Config {
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
         })
         .optional(),
+      debate: z
+        .object({
+          preset: z.enum(["fast", "balanced", "deep", "custom"]).optional().default("balanced").describe(
+            "Default Debate/Consensus workflow preset: fast | balanced | deep | custom",
+          ),
+          planners: z.number().int().min(1).max(5).optional().describe("Number of independent planners (1-5)"),
+          critique_rounds: z.number().int().min(0).max(2).optional().describe("Number of critique rounds (0-2)"),
+          judge_enabled: z.boolean().optional().describe("Enable the judge synthesis step"),
+          implementation_strategy: z.enum(["single", "parallel"]).optional().describe(
+            "Implementation strategy: single (default) or parallel",
+          ),
+          implementers: z.number().int().min(1).max(3).optional().describe("Number of implementers when using parallel strategy (1-3)"),
+          reviewers: z.number().int().min(1).max(4).optional().describe("Number of reviewers (1-4)"),
+          verifier_enabled: z.boolean().optional().describe("Enable the verifier (run real tests/lint/build)"),
+          max_repair_loops: z.number().int().min(0).max(3).optional().describe("Maximum repair loops (0-3)"),
+          review_strictness: z.enum(["light", "standard", "strict"]).optional().describe(
+            "Review strictness: light | standard | strict",
+          ),
+        })
+        .optional()
+        .describe("Debate/Consensus multi-model workflow configuration"),
     })
     .strict()
     .meta({
